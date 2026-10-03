@@ -17,6 +17,7 @@
 | [种子表.md](种子表.md) | 浏览器 `require` 能解析到的模块 id → 导出 | §7.2 | 解 `dsh-web-frontend/dist`，在前端主 bundle 里搜 `react-dom/client` |
 | [展示元信息-形状.md](展示元信息-形状.md) | `locale/<lang>.json` 必须嵌套 `meta`（扁平会被静默忽略）+ 三个"meta"的区别 | §0.2、§6.1 | 解 `dsh-app-boot` 读 `dictionariesOf()`；或改一次 `package.json.description` 看管理页显示哪个 |
 | [mcp-client-字段.md](mcp-client-字段.md) | `dsh-mcp-client` 的 config 字段与默认值 | §3.6 | `Config.listConfigs { name: "@deepseek-ai/dsh-mcp-client" }` |
+| [依赖解析.md](依赖解析.md) | **安装方式 × 裸 import 解析**：`link:` 装的工作区插件解析不到、tarball/registry 装进 profile 的可以；含 `exports` 键前缀静默失败 | §9.1、§6.1 | 在插件目录跑 `node -e "console.log(require.resolve('<包>'))"` |
 | [槽位-ownerProps.md](槽位-ownerProps.md) | 两个槽位当时返回的 ownerProps 接口源码 | §7.5 | `Slots.listSubTree { root: "<槽位名>" }` 的 `catalog` |
 | [诊断文案.md](诊断文案.md) | `application` / `status` / `diagnostic` 的原样输出 | §9.2、§10 | 制造一次失败，读安装返回的 `diagnostic` |
 | [_tools/asar-extract.js](_tools/asar-extract.js) | asar 解包脚本（唯一能读随包文档的办法） | 工作流 §3.1 | 自带三条自检；读不出就换 `@electron/asar` |

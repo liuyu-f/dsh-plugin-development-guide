@@ -152,7 +152,8 @@ If yes → it may only live in `_ref/` or `版本快照/`, and **the body keeps 
 
 Tick these off before writing a line (each item's reasoning is in the matching guide section):
 
-- [ ] The packages I import, **are they on the resolution path?** (a profile install usually is not → write with zero imports)
+- [ ] The packages I import, **are they on the resolution path?** (run `node -e "console.log(require.resolve('<pkg>'))"` in the plugin directory. It **depends on how the plugin is installed** — see guide §9.1: a `link:`ed workspace plugin cannot resolve them, a tarball/registry install into the profile can)
+- [ ] Every `exports` key starts with `.` (writing `"package.json"` makes the whole field invalid → the manager page reports a "package metadata error")
 - [ ] `Config` is **either** native schemastery **or** not exported at all
 - [ ] `peerDependencies` is **either** undeclared **or** pinned to an exact version (a wrong range gets the whole package skipped)
 - [ ] Every slot name, prop name, and method name came from a query result

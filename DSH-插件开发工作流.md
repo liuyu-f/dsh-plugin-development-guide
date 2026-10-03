@@ -152,7 +152,8 @@ node _ref/_tools/asar-extract.js "<安装目录>/resources/app.asar" \
 
 落笔前逐条打勾（详细解释见开发指南对应章节）：
 
-- [ ] 我要 import 的包，**在解析路径上吗**？（profile 装法默认不在 → 零 import 写法）
+- [ ] 我要 import 的包，**在解析路径上吗**？（在插件目录里跑 `node -e "console.log(require.resolve('<包>'))"`。**它取决于安装方式**，见指南 §9.1：`link:` 进来的工作区插件解析不到，tarball/registry 装进 profile 的可以）
+- [ ] 清单的 `exports` 每个键都以 `.` 开头（写 `"package.json"` 会让整个 `exports` 非法 → 管理页报"包元信息错误"）
 - [ ] `Config` 我**要么**用原生 schemastery，**要么**干脆不导出
 - [ ] `peerDependencies` 我**要么**不声明，**要么**钉精确版本（写错范围会被整包拦下）
 - [ ] 每个槽位名、props 名、方法名都来自查询结果

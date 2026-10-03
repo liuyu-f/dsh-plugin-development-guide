@@ -847,7 +847,7 @@ parameters: {
 | `version` | 与已安装的同名包同版本，会让两份无法区分 |
 | `type` | 必须 `"module"` |
 | `main` | 即使不在 `files` 里也要写（`files` 只影响打包发布） |
-| `exports` | Host `"."`；Client `"./client"`；元数据 `"./package.json"`；文案 `"./locale/*.json"` |
+| `exports` | Host `"."`；Client `"./client"`；元数据 `"./package.json"`；文案 `"./locale/*.json"`。⚠️ **所有键都必须以 `./` 或 `.` 开头**，写成 `"package.json"` 会让 `exports` 整个非法 → Node 报 `ERR_INVALID_PACKAGE_CONFIG`、**插件管理页直接显示红色"包元信息错误"**（✅ 实测踩过） |
 | `icon` | 相对 manifest 目录；SVG/PNG/JPEG/WebP，≤256 KiB；拒绝绝对路径、URL、目录外路径、逃逸符号链接 |
 | `meta` | `package.json` 顶层：清单内联的展示文本，**扁平**（`{ "title": …, "description": … }`） |
 | `locale/<lang>.json` | 按语言的展示文本，**嵌套**（`{ "meta": { "title": …, "description": … } }`）。⚠️ **扁平形状会被静默忽略** → 形状快照见 [`版本快照/0.2.0-rc.2/展示元信息-形状.md`](版本快照/0.2.0-rc.2/展示元信息-形状.md) |
@@ -1198,41 +1198,62 @@ ctx.sessionProjections.register({
 
 ## 9. 版本、解析路径、配置形状
 
-### 9.1 能不能 import `@deepseek-ai/*`（结论 + 机制）
+### 9.1 能不能 import `@deepseek-ai/*`：取决于**安装方式**，不是"必须零 import"
 
-**推荐写法：插件零 `@deepseek-ai/*` import，只用 `node:` 内建，一切服务从 `ctx` 拿。**
-但理由**不是"import 必然失败"** —— 是**解析路径**：
+**一句话**：`@deepseek-ai/*` 能不能裸 import，与包名无关，只取决于**你这个插件的真实路径在不在 profile 目录下面**。
 
-| 你的包怎么装进去 | 裸名从哪里解析 | 能否 import |
-|---|---|---|
-| `plugin_manager install_bundle`（`file:` / 本地目录，= profile 的 `node_modules/<name>` 指向你的目录） | 从**你目录的真实路径**向上找 `node_modules` —— 那里只有 profile 自己装的包 | ❌ `ERR_MODULE_NOT_FOUND` |
-| 同上，但你把该包**声明成依赖**并让 pnpm 装进 profile | profile 的 `node_modules` 里有它 | ✅ |
-| dsh 自带的组合包（从安装目录解析） | 从安装目录出发 | ✅ |
+**机制**：Node 解析一个裸包名时，从**发起方的真实路径**（符号链接会先被解析成真实路径）开始，逐级向上找 `node_modules`。
+所以要看的是"**插件实际躺在哪里**"，而不是"名字是不是 `@deepseek-ai/*`"。
 
-> **机制**：`install_bundle` 用 `link:` 把包挂进 profile 的 `node_modules`。Node 解析裸包名时
-> **先解析符号链接的真实路径**，再从**真实路径的祖先目录**找 `node_modules` —— 两者对不上就失败。
-> 也就是说：**"能不能 import"取决于包在不在解析路径上，与它是不是 `@deepseek-ai/*` 无关。**
+| # | 安装方式 | 插件真实路径 | 裸 import | 说明 |
+|---|---|---|---|---|
+| 1 | 工作区目录 `link:` 进 profile（**开发期常态**：`install_bundle` 传本地目录） | 你的工作区（如 `F:\...`） | ❌ `ERR_MODULE_NOT_FOUND` | 从工作区往上找，那里没有 profile 的 `node_modules`。**即使你把依赖装进了 profile 也一样失败**（✅ 实测） |
+| 2 | 工作区目录，但在**工作区里自己 `pnpm install`** | 仍是工作区路径 | ✅ | 依赖在插件自己的 `node_modules` 里，从真实路径往上就能找到 |
+| 3 | **`pnpm pack` 成 tarball（或发布到 registry / 从 git 装）后装进 profile** | **profile 的 `node_modules` 内** | ✅ **实测** | 真实路径在 profile 下面 → 命中 profile 的 `node_modules` |
 
-✅ 实测对照（同一个包，逐字不动，只改一处）：
+**方式 3 的实测证据**（本机，`0.2.0-rc.2`）：把探针插件声明了 `"@deepseek-ai/dsh-tools": "0.2.0-rc.2"` 依赖、`pnpm pack` 后用 pnpm 装进 profile，
+插件里写**静态具名 import**：
 
-| 形态 | 结果 |
+```js
+import { defineTool } from '@deepseek-ai/dsh-tools'   // ← 模块加载期就执行
+```
+
+结果：`application` 不再是 `failed`，**插件激活成功、工具注册成功**，工具自报 `defineTool is a function: true`，
+`import.meta.url` 指向 `.../profiles/desktop/node_modules/@local/<name>/index.js`。
+
+**开发期怎么办**（方式 1 是主流，因为你要边改边看）：
+
+| 你的插件要不要 import Harness 包 | 做法 |
 |---|---|
-| 零 `@deepseek-ai/*` import | ✅ `application: "applied"`、`warnings: []` |
-| 只把 `import { defineTool } from '@deepseek-ai/dsh-tools'` **去掉** | ✅ 立刻激活成功 |
-| 保留一个**手写的 `Config` 导出**（合法 Standard Schema，但不是原生 schemastery） | ❌ 激活失败：`TypeError: Cannot read properties of undefined (reading 'validate')` |
-| 卸载后重新 `install_bundle` | ✅ `application: "applied"`、`warnings: []` |
+| **不 import**（一切服务从 `ctx` 取） | 什么都不用做，方式 1 直接可用。这也是本指南推荐的默认形态 |
+| **要 import**（例如想用 `defineTool` 拿参数校验、或想导出原生 `Config`） | 二选一：① **发成 registry/tarball 再装**（方式 3）；② 在工作区里给你自己的插件目录做一次 `pnpm install`（方式 2）——**注意**：插件目录会成为独立 workspace 根，装进来的 `@deepseek-ai/dsh-tools` 是从 registry 取的，请与运行时版本对齐 |
 
-**零 import 的三个替代**：
+> ⚠️ **`link:` 不会安装被链接包的依赖**（✅ 最小对照实测：消费者与被链接包两边都没有 `node_modules/<dep>`，`.pnpm` 里也没有）。
+> 别指望"在 package.json 里写了 dependencies，`install_bundle` 就会替你把它们装上"——**只在方式 2、3 成立**。
+> 想确认自己处在哪种情况，一条命令即可：
+>
+> ```sh
+> node -e "console.log(require.resolve('@deepseek-ai/dsh-tools'))"   # 在插件目录里跑
+> ```
+>
+> 打印出路径 = 能 import（说明真实路径旁有 `node_modules`）；`MODULE_NOT_FOUND` = 不能。
 
-| 不用 | 改用 |
+**零 import 仍然是很好的默认**，但它是**开发期最省事的选择**，不是规范要求，也不是唯一正确形态：
+
+| 不用 | 也可以改用 |
 |---|---|
+| `import { defineTool } from '@deepseek-ai/dsh-tools'` | 直接注册 `ToolDefinition`，参数写协议级 JSON Schema（§5.1 写法 B，**记得自己校验参数**）——零依赖时选这个 |
+| `import Schema from '@deepseek-ai/schemastery'` | 不导出 `Config`，把可调值放行 `config` 里防御性读（§9.4）——零依赖时选这个 |
 | `import { Service } from '@deepseek-ai/cordis'` | 需要对外提供服务时用 `ctx.provide(...)`，或把方法挂到你在 `apply` 里注册的对象上 |
-| `import { defineTool } from '@deepseek-ai/dsh-tools'` | 直接注册 `ToolDefinition`，参数写协议级 JSON Schema（§5.1 写法 B，**记得自己校验参数**） |
-| `import Schema from '@deepseek-ai/schemastery'` | **不导出 `Config`**（§9.4） |
 
-> ⚠️ **不要**为了"以后可能用到"先写 import；真需要某个包时，先把它装成 profile 依赖。
-> ⚠️ **不要**照抄网上"在 `%DSH_HOME%\profiles\node_modules` 里找软链接"的排障法：
-> 该目录在本版本**不存在**（✅ 实测），相关兜底函数已从代码中移除。这套解析完全是**进程内**的。
+> ⚠️ 真要用 import：**先确认它在解析路径上**（上面那条 `require.resolve`），再决定要不要引入依赖；
+> 别写了 import 却让它以 `failed to import` 这种没有原因的形式失败。
+> ⚠️ 顺带一条版本事实：`@deepseek-ai/dsh-tools@0.2.0-rc.2` 在公开 registry 上**确实存在**（✅ `pnpm view` 实测），
+> 所以方式 2/3 至少要装它时不必依赖安装目录。
+
+> ⚠️ **不要为了"以后可能用到"先写 import**：引入依赖是有成本的（多一份要同步、要能解析），需要时再引入。
+> ⚠️ **不要照抄网上"去 `%DSH_HOME%\profiles\node_modules` 里找软链接"的排障法**：那类兜底在本版本已从代码里移除，
+> 解析完全是**进程内**的（走 Node 自己那套，即本节讲的机制）。
 
 ### 9.2 诊断入口
 
@@ -1569,6 +1590,7 @@ UI      __ModuleLoader__.load({ id: 包名, factory(require) {...} })
 | 读长 4 字节 + 起点偏 4 字节 | **两个错误互相抵消**，输出一直"能用" | 逐个验中间量，而不是只验最终结果 |
 | "peer 必要但不充分" | 归因错误 | 报错无法区分是哪个 import 失败 |
 | "文档里这么写的，所以对" | **把描述当契约**：`locale/*.json` 的嵌套形状，本文档自己曾教成扁平 | 拿**真实产物**对照（照抄读取器的判定逻辑跑一遍），别信描述 |
+| "插件**必须**零 import" | **把单一安装场景的观察当成了通用规范**：`link:` 进来的工作区插件确实解析不到，但那是**安装方式**决定的，不是规范要求；tarball/registry 装进 profile 的插件**静态 import 成功**（✅ 实测） | 分清"**这个场景下的现象**"与"**规范的要求**"；换一个变量（安装方式）就能证伪的结论，不能写成规则 |
 
 > **形状类契约最容易"看起来对"**：文件存在、JSON 合法、key 也拼对了，只是层级差一层 →
 > 不报错、不生效。凡是"结构/嵌套/形状"这类约定，都要**至少拿一个官方产物对照一次**

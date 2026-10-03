@@ -846,7 +846,7 @@ it needs no `import` of `@deepseek-ai/cordis` (§9.1) and is naturally reused by
 | `version` | The same version as an installed package of the same name makes the two indistinguishable |
 | `type` | Must be `"module"` |
 | `main` | Write it even when it is not in `files` (`files` only affects packaging/publishing) |
-| `exports` | Host `"."`; Client `"./client"`; metadata `"./package.json"`; copy `"./locale/*.json"` |
+| `exports` | Host `"."`; Client `"./client"`; metadata `"./package.json"`; copy `"./locale/*.json"`. ⚠️ **Every key must start with `./` or be `.`** — writing `"package.json"` makes the whole `exports` field invalid → Node reports `ERR_INVALID_PACKAGE_CONFIG` and the **Plugin Manager page shows a red "package metadata error"** (✅ hit this while measuring) |
 | `icon` | Relative to the manifest directory; SVG/PNG/JPEG/WebP, ≤256 KiB; absolute paths, URLs, paths outside the directory and escaping symlinks are rejected |
 | `meta` | `package.json` top level: inline display text, **flat** (`{ "title": …, "description": … }`) |
 | `locale/<lang>.json` | Per-language display text, **nested** (`{ "meta": { "title": …, "description": … } }`). ⚠️ **A flat shape is silently ignored** → see the shape snapshot [`版本快照/0.2.0-rc.2/展示元信息-形状.md`](版本快照/0.2.0-rc.2/display-metadata-shape.en.md) |
@@ -1197,41 +1197,61 @@ ctx.sessionProjections.register({
 
 ## 9. Versions, resolution paths, config shapes
 
-### 9.1 Whether you can import `@deepseek-ai/*` (conclusion + mechanism)
+### 9.1 Whether you can import `@deepseek-ai/*`: it depends on **how the plugin is installed**, not on "zero imports"
 
-**Recommended style: zero `@deepseek-ai/*` imports in a plugin, only `node:` builtins, with every service taken from `ctx`.**
-But the reason is **not "an import always fails"** — it is the **resolution path**:
+**One sentence**: whether a bare `@deepseek-ai/*` import works has nothing to do with the package name; it depends only on **whether your plugin's real path sits under the profile directory**.
 
-| How your package got installed | Where a bare name resolves from | Can it import |
-|---|---|---|
-| `plugin_manager install_bundle` (`file:` / a local directory, i.e. the profile's `node_modules/<name>` points at your directory) | Upward from **your directory's real path** — which only has the profile's own packages | ❌ `ERR_MODULE_NOT_FOUND` |
-| Same, but you **declare that package as a dependency** so pnpm installs it into the profile | The profile's `node_modules` has it | ✅ |
-| A composition package shipped with dsh (resolved from the installation directory) | From the installation directory | ✅ |
+**The mechanism**: to resolve a bare package name, Node starts from the **initiating module's real path** (symlinks are resolved first) and walks **up** through ancestor directories looking for `node_modules`.
+So what matters is **where the plugin actually lives**, not whether the name starts with `@deepseek-ai/`.
 
-> **The mechanism**: `install_bundle` links the package into the profile's `node_modules` with `link:`. When Node resolves a bare name it
-> **first resolves the symlink's real path**, then searches the **ancestor directories of that real path** for `node_modules` — and the two do not line up, so it fails.
-> In other words: **whether an import works depends on whether the package is on the resolution path, not on whether it is `@deepseek-ai/*`.**
+| # | How it is installed | The plugin's real path | Bare import | Why |
+|---|---|---|---|---|
+| 1 | A workspace directory `link:`ed into the profile (**the normal development case**: `install_bundle` with a local directory) | Your workspace (e.g. `F:\...`) | ❌ `ERR_MODULE_NOT_FOUND` | Walking up from the workspace never reaches the profile's `node_modules`. **It still fails even if you installed the dependency into the profile** (✅ measured) |
+| 2 | A workspace directory where you ran **`pnpm install` inside that workspace** | still the workspace path | ✅ | The dependency sits in the plugin's own `node_modules`, which is on the walk up from the real path |
+| 3 | **`pnpm pack` to a tarball (or published to a registry / installed from git) and then installed into the profile** | **inside the profile's `node_modules`** | ✅ **measured** | The real path is under the profile → the walk hits the profile's `node_modules` |
 
-✅ A measured comparison (the same package, not one character changed except one thing):
+**The evidence for case 3** (on this machine, `0.2.0-rc.2`): a probe plugin declaring `"@deepseek-ai/dsh-tools": "0.2.0-rc.2"` was `pnpm pack`ed and installed into the profile with pnpm, with a **static named import** inside it:
 
-| Form | Result |
+```js
+import { defineTool } from '@deepseek-ai/dsh-tools'   // ← runs at module-load time
+```
+
+Result: `application` was no longer `failed`; **the plugin activated and its tool registered**, the tool reported `defineTool is a function: true`, and
+`import.meta.url` pointed at `.../profiles/desktop/node_modules/@local/<name>/index.js`.
+
+**What to do during development** (case 1 is the mainstream one, because you want to edit and see it live):
+
+| Does your plugin import Harness packages? | What to do |
 |---|---|
-| Zero `@deepseek-ai/*` imports | ✅ `application: "applied"`, `warnings: []` |
-| Only removing `import { defineTool } from '@deepseek-ai/dsh-tools'` | ✅ activated successfully immediately |
-| Keeping a **hand-written `Config` export** (a legal Standard Schema, but not native schemastery) | ❌ activation failed: `TypeError: Cannot read properties of undefined (reading 'validate')` |
-| Uninstall, then `install_bundle` again | ✅ `application: "applied"`, `warnings: []` |
+| **No** (every service comes from `ctx`) | Nothing. Case 1 just works — and this is the default shape this guide recommends |
+| **Yes** (e.g. you want `defineTool`'s argument validation, or to export a native `Config`) | Either ① **ship it as a registry/tarball install** (case 3), or ② run `pnpm install` once **in your plugin directory** (case 2) — note that the directory then becomes its own workspace root and the `@deepseek-ai/dsh-tools` it fetches comes from the registry, so keep it aligned with the runtime version |
 
-**Three replacements for zero imports**:
+> ⚠️ **`link:` does not install the linked package's dependencies** (✅ measured in a minimal comparison: neither the consumer nor the linked package ended up with `node_modules/<dep>`, and nothing landed in `.pnpm`).
+> So do not assume "I declared `dependencies` in package.json, therefore `install_bundle` will install them" — **that only holds for cases 2 and 3**.
+> One command tells you which case you are in:
+>
+> ```sh
+> node -e "console.log(require.resolve('@deepseek-ai/dsh-tools'))"   # run it in the plugin directory
+> ```
+>
+> A printed path = the import will work (there is a `node_modules` beside the real path); `MODULE_NOT_FOUND` = it will not.
 
-| Instead of | Use |
+**Zero imports is still an excellent default**, but it is **the least-effort choice during development**, not a specification requirement and not the only correct shape:
+
+| Instead of | You may also |
 |---|---|
+| `import { defineTool } from '@deepseek-ai/dsh-tools'` | register a `ToolDefinition` directly with protocol-level JSON Schema in `parameters` (§5.1 style B, **and validate the arguments yourself**) — pick this when you have no dependencies |
+| `import Schema from '@deepseek-ai/schemastery'` | export no `Config` and read tunables defensively from the row `config` (§9.4) — pick this when you have no dependencies |
 | `import { Service } from '@deepseek-ai/cordis'` | `ctx.provide(...)` when you must expose a service, or attach methods to an object you registered in `apply` |
-| `import { defineTool } from '@deepseek-ai/dsh-tools'` | register a `ToolDefinition` directly, with protocol-level JSON Schema in `parameters` (§5.1 style B, **and validate the arguments yourself**) |
-| `import Schema from '@deepseek-ai/schemastery'` | **do not export `Config`** (§9.4) |
 
-> ⚠️ Do **not** write an import "in case it is needed later"; when you really need a package, install it as a profile dependency first.
-> ⚠️ Do **not** copy the online troubleshooting advice to "look for symlinks in `%DSH_HOME%\profiles\node_modules`":
-> that directory **does not exist** on this version (✅ measured), and the related fallback function has been removed from the code. This resolution is entirely **in-process**.
+> ⚠️ If you do want an import: **first confirm it is on the resolution path** (the `require.resolve` line above), and only then decide to take the dependency;
+> do not write an import and let it fail as a causeless `failed to import`.
+> ⚠️ One adjacent version fact: `@deepseek-ai/dsh-tools@0.2.0-rc.2` **does exist** on the public registry (✅ measured with `pnpm view`),
+> so cases 2 and 3 do not depend on the installation directory at least for that package.
+
+> ⚠️ Do **not** write an import "in case it is needed later": taking a dependency has a cost (one more thing to keep in sync and resolvable).
+> ⚠️ Do **not** copy the online troubleshooting advice to "go look for symlinks in `%DSH_HOME%\profiles\node_modules`": those fallbacks were removed
+> from the code in this version, and resolution is entirely **in-process** (Node's own algorithm, i.e. the mechanism in this section).
 
 ### 9.2 Diagnostic entry points
 
@@ -1571,6 +1591,7 @@ Behind every "measured" claim above is one misjudgement, and they are almost all
 | Reading a length 4 bytes long and starting 4 bytes late | **Two errors cancelled out**, so the output kept "working" | Verify intermediate quantities, not just the final result |
 | "peer is necessary but not sufficient" | Wrong attribution | The error could not say which import failed |
 | "The documentation says so, so it is true" | **Treated a description as a contract**: this document itself once taught the flat shape for `locale/*.json` | Compare against a **real artifact** (run the reader's own decision logic), do not trust the description |
+| "A plugin **must** use zero imports" | **Treated one install scenario's observation as a general rule**: a `link:`ed workspace plugin really cannot resolve them, but that is decided by **how it is installed**, not by the specification — a tarball/registry install into the profile imports statically just fine (✅ measured) | Separate "**what happens in this scenario**" from "**what the specification requires**"; a conclusion that one changed variable (the install method) can falsify must not be written as a rule |
 
 > **Shape contracts are the easiest thing to "look right"**: the file exists, the JSON is valid, the keys are spelled correctly — only the nesting is one level off, and
 > nothing errors and nothing takes effect. For any "structure / nesting / shape" convention, **compare against at least one official artifact**
