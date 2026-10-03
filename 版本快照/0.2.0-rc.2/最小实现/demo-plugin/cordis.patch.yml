@@ -1,0 +1,8 @@
+# 把 demo-plugin 行插进 Loader 组合。
+# 行 id 稳定，供更高优先级的 patch 定位（覆盖时 config 是整体替换）。
+- insert:
+    - id: demo-plugin
+      name: '@local/demo-plugin'
+      # config 会原样传给 apply（本插件不导出 Config，见指南 §9.4）：
+      # config:
+      #   storageRoot: C:/somewhere

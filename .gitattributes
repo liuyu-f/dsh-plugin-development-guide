@@ -1,0 +1,12 @@
+# Windows 上默认的 CRLF 会让同一份 Markdown 在别人机器上显示成整文件改动。
+# 统一按 LF 存进仓库，检出时由 git 自己决定。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zstd binary

@@ -1,0 +1,14 @@
+# 操作系统 / 编辑器噪声
+Thumbs.db
+Desktop.ini
+.DS_Store
+*~
+*.swp
+
+# 本地参考资料与探针脚本：属于使用者自己的工作区，不进这个仓
+_ref/
+_tools/
+
+# 生成物
+node_modules/
+*.log

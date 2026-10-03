@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Demo Plugin",
+    "description": "Minimal complete plugin: one agent tool, one authenticated HTTP route, one real slot."
+  }
+}
