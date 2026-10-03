@@ -922,7 +922,24 @@ Row fields: `id`, `name`, optional `config`, plus `disabled`, `inject`, `interce
 > (so "the route still responds" does not prove the new code loaded); if the new generation registers **the same path**, webserver throws
 > `duplicate exact route`, leaving you a **half-new, half-old** runtime. If you must change generations without HMR: **restart properly**.
 
-**The Client half always needs a page refresh** (the browser re-fetches `/plugins/<package>/client.js`).
+**With `hmr.root` in place, BOTH halves reload** — not just the Host half:
+
+| Half | Who is watching | The reload path |
+|---|---|---|
+| **Host** | HMR's file watcher | Clear the ESM/CJS module caches → re-import → the old fiber unloads, the new generation mounts |
+| **Client** | The same file watcher | The client-module registry notices the file's mtime/ctime/size changed, decides on a new revision, and pushes an SSE `{"type":"rebuilt", id, rev}` frame through `ctx.clientModules.onRebuilt`; the module controller in the browser swaps that revision in and re-renders |
+
+So **editing `client.js` often needs no manual refresh either**.
+
+> ⚠️ **When a change does not show up, refresh once before concluding anything — that step rules out timing, it does not swap code.**
+> The frame may already have rendered while your change lands in the next one, and the SSE frame and the browser's swap can be a beat apart.
+> So the criterion splits in two:
+>
+> - **Behaviour changed after the refresh** → the new code **was already live**; you simply looked too early (a timing artifact);
+> - **Still the old behaviour after the refresh** → this generation **never swapped in**: no `hmr.root`, the edited file is outside the watched directory,
+>   or the Host half failed to load (see §9.2 for the diagnostics).
+>
+> **Order of investigation: refresh first to rule out timing, then check the generation.**
 
 ### 6.4 Update / uninstall / reinstall (✅ fully measured)
 
@@ -1353,7 +1370,7 @@ Three disciplines that do not change with the version:
 | Toggling the plugin changes nothing | A toggle does not reload the module | §6.3 |
 | You want a new generation without restarting | ✅ `hmr.root` | §6.3 |
 | Weird behavior after "changing the path" | The old generation was not unloaded → old routes live on / a duplicate route throws | §6.3 |
-| The Client side does not react | **You must refresh the page** | §6.3 |
+| The Client side does not react | Refresh once to rule out timing; only a persistent old behaviour means the generation did not swap | §6.3 |
 | You are unsure which generation is running | File mtime **vs** process start time | §6.3 |
 
 ### C. UI blank / wrong
@@ -1456,7 +1473,7 @@ Three disciplines that do not change with the version:
 | 4 | `Config.listConfigs`'s `status` | **Module loaded ≠ activated** |
 | 5 | A live call (call a tool once, send one unauthenticated probe, read the endpoint once) | It really works |
 | 6 | `Slots.listSubTree` showing your own occupant with `active: true` | The registration succeeded |
-| 7 | Visual verification (when browser control exists) | What the user sees |
+| 7 | Visual verification (when browser control exists); **when a Client change does not show, run it after one refresh to rule out timing** | What the user sees |
 
 **The riskier the change (writing an endpoint, deleting data, changing permissions), the further down you must go.**
 
@@ -1492,7 +1509,8 @@ diagnose application/warnings/diagnostic + Config.listConfigs' status
          status: schema=native Config / absent=no Config export (normal) / unsupported=wrong shape / inactive=not activated
 generation one module is evaluated once per process; neither toggling nor reinstalling changes the generation
          ✅ the hmr row's config.root = [your src]; ❌ changing the path (the old generation is not unloaded)
-         Client code changes always need a page refresh
+         with hmr.root in place BOTH halves hot reload (the Client one swaps revision via an SSE `rebuilt` frame)
+         when a change does not show up, refresh once to rule out timing — it is a diagnostic step, not a swap
 uninstall installing again while installed → ambiguous-install; remove_bundle first
          uninstalling cleans the manifest and lockfile; Windows may leave a junction (harmless)
 
@@ -1592,5 +1610,5 @@ Behind every "measured" claim above is one misjudgement, and they are almost all
 | Whether new code is running (Host) | File mtime **vs** process start time | A later process start means a new generation |
 | A new generation without restarting | The `hmr` row's `config.root` contains the source directory | Editing a file reloads it |
 | Whether an uninstall was clean | After `remove_bundle`, query `listConfigs` by package name | An empty directory |
-| Whether a Client change needs a refresh | Cannot be decided by timestamps | **You must refresh the page** |
+| Whether a Client change needs a refresh | If the behaviour did not change, refresh once and look again | Changed after the refresh = it was already live (timing); still unchanged = no `hmr.root`, or the file is outside the watched directory |
 | Why the manager page has no icon/title | Check `icon` (≤256 KiB, relative path) and `locale/*.json` | §6.1 |

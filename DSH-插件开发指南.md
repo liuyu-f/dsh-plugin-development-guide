@@ -923,7 +923,24 @@ patch 是**顶层 YAML 数组**：
 > （所以"路由还能响应"不能证明新代码已加载）；若新世代注册**同一路径**，webserver 会抛
 > `duplicate exact route`，于是你得到**新旧混杂**的运行时。真要换代又没有 HMR：**老老实实重启**。
 
-**Client 半边永远要刷新页面**（浏览器会重新拉 `/plugins/<包名>/client.js`）。
+**加了 `hmr.root` 之后，两半都会跟着重载** —— 不是只有 Host 半边：
+
+| 半边 | 谁在看着 | 重载路径 |
+|---|---|---|
+| **Host** | HMR 的文件监视 | 清 ESM/CJS 模块缓存 → 重新 import → 旧 fiber 卸载、新世代挂载 |
+| **Client** | 同一份文件监视 | 客户端模块登记处发现文件 mtime/ctime/size 变了就判定新修订版，经 `ctx.clientModules.onRebuilt` 推出 SSE `{"type":"rebuilt", id, rev}`；浏览器里的模块控制器据此换掉那一版并重渲染 |
+
+所以**改 `client.js` 也常常不必手动刷新**。
+
+> ⚠️ **"改动没体现"时先刷新页面 —— 这一步的作用是排除时序，不是换代码。**
+> 帧可能已经渲染完而你的改动落在下一帧；SSE 帧送达与浏览器换版之间也可能差一拍。
+> 于是判据分两种：
+>
+> - **刷新后行为变了** → 新代码**本来就已生效**，你只是观察晚了（时序问题）；
+> - **刷新后仍是旧行为** → 这一版**根本没换**：没配 `hmr.root`、改的文件不在监视范围内、
+>   或是 Host 半边加载失败（回 §9.2 看诊断）。
+>
+> **排查顺序：先刷新排除时序，再查世代。**
 
 ### 6.4 更新 / 卸载 / 重装（✅ 完整实测）
 
@@ -1353,7 +1370,7 @@ node 版本快照/0.2.0-rc.2/_tools/asar-extract.js "<安装目录>/resources/ap
 | 开关插件后行为不变 | toggle 不重载模块 | §6.3 |
 | 想不重启就换世代 | ✅ `hmr.root` | §6.3 |
 | 用"换路径"后行为诡异 | 旧世代没卸载 → 旧路由存活 / 重复路由报错 | §6.3 |
-| Client 侧没反应 | **必须刷新页面** | §6.3 |
+| Client 侧没反应 | 先刷新排除时序；仍是旧行为才是没换世代 | §6.3 |
 | 不确定跑的是哪一代 | 文件 mtime **vs** 进程启动时间 | §6.3 |
 
 ### C. UI 白屏 / 显示错
@@ -1456,7 +1473,7 @@ node 版本快照/0.2.0-rc.2/_tools/asar-extract.js "<安装目录>/resources/ap
 | 4 | `Config.listConfigs` 的 `status` | **模块加载 ≠ 激活成功** |
 | 5 | 活体验证（调一次工具、发一次无凭据探测、读一次端点） | 真能工作 |
 | 6 | `Slots.listSubTree` 看到自己的 occupant 且 `active: true` | 注册成功 |
-| 7 | 视觉验证（有浏览器控制时） | 用户看到什么 |
+| 7 | 视觉验证（有浏览器控制时）；**Client 改动没体现时，先刷新跑一遍排除时序** | 用户看到什么 |
 
 **改动越危险（写端点、删数据、改权限），越要走到第 5 层。**
 
@@ -1491,7 +1508,8 @@ patch   顶层数组；insert 追加；{ id, config } 覆盖且 config 整体替
         status: schema=原生Config / absent=没导出Config(正常) / unsupported=形状不对 / inactive=没激活
 换代    同进程一个模块只求值一次；toggle 与重装都不换世代
         ✅ hmr 行 config.root = [你的 src]；❌ 换路径（旧世代不卸载）
-        换 Client 代码永远要刷新页面
+        配了 hmr.root 之后【两半都会热重载】（Client 经 SSE 的 rebuilt 帧换版本）
+        改动没体现时先刷新一次——那是排除时序的判据，不是换代码的手段
 装卸    已装状态下再 install_bundle → ambiguous-install，先 remove_bundle 再装
         卸载清清单+锁文件；Windows 可能残留 junction（无害）
 
@@ -1590,5 +1608,5 @@ UI      __ModuleLoader__.load({ id: 包名, factory(require) {...} })
 | 新代码是否在跑（Host） | 文件 mtime **vs** 进程启动时间 | 进程启动更晚 = 新世代 |
 | 想不重启就换世代 | `hmr` 行 `config.root` 含源码目录 | 改文件即重载 |
 | 卸载是否干净 | `remove_bundle` 后按包名查 `listConfigs` | 空目录 |
-| Client 改动要不要刷新 | 无法用时间戳判断 | **必须刷新页面** |
+| Client 改动要不要刷新 | 改后行为没变时，先刷新一次再看 | 刷新后变了 = 本来已生效（时序）；仍没变 = 没配 `hmr.root` 或文件不在监视范围内 |
 | 管理页为什么没图标/标题 | 检查 `icon`（≤256 KiB、相对路径）与 `locale/*.json` | §6.1 |

@@ -211,7 +211,9 @@ plugin_manager { action: "install_bundle", target: "<absolute package directory>
 - **At least two independent checks** count as verified. Example: after changing route authentication, check both "an unauthenticated POST gets 401 + my own JSON" and "a nonexistent path gets 405" as a control — the first proves the check runs first, the second proves the answer comes from your handler.
 - **Discriminate causes**: `status` distinguishes "module loaded" from "activated"; `fiberPhase` shows whether the row is live; a `diagnostic` with a stack points at the line that threw. Pick the one that discriminates.
 
-**After changing the client half you must refresh the page** — there is no other way.
+**When a change does not show up, refresh the page before concluding anything** — but that step only **rules out timing**, it does not swap code.
+With `hmr.root` in place **both halves hot reload** (the Client one swaps its module revision through an SSE `rebuilt` frame);
+behaviour changed after the refresh → the new code was already live and you simply observed late; still the old behaviour → the generation never swapped (bisect with steps 5 and 6 in §7).
 
 ---
 
@@ -292,7 +294,7 @@ The correct move is for it to **be structurally absent** — move the value into
 ③ Reference  extract asar → _ref/<package>/ → read the README's "internals" + the JSDoc in lib
 ④ Write      tick the ten boxes in §4 + node --check
 ⑤ Install    install_bundle → application:"applied" and warnings:[]
-⑥ Verify     walk the layers by risk; ≥2 independent checks corroborate; refresh the page after client changes
+⑥ Verify     walk the layers by risk; ≥2 independent checks corroborate; if a client change does not show, refresh once to rule out timing
 ⑦ Close out  only attributable conclusions; unattributable ones become criteria; delete the rest
              mechanisms go into the manual; version data keeps only "the command that queries it"
 
