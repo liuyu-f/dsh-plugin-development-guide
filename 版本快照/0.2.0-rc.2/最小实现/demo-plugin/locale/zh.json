@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Demo Plugin",
-    "description": "最小完整插件：一个 agent 工具 + 一条带鉴权的 HTTP 路由 + 一个真实槽位。"
-  }
-}

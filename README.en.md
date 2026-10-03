@@ -1,60 +1,28 @@
-# DSH Plugin Development Guide (package)
+# DSH Plugin Development Guide
 
-> 中文 ｜ [English](README.en.md)
+For writing plugins on the **official DeepSeek Harness desktop app** (`@deepseek-ai/dsh`, Windows desktop + Web — one runtime).
+**Two documents, and you can start.**
 
-_English mirror of `README.md`; that Chinese file is the source of truth if they disagree._ ｜ [中文](README.md)
+| Document | What it is |
+|---|---|
+| [Workflow](workflow.en.md) | **Read before you start**: seven stages, from framing the task to verifying and closing out; plus a six-step bisection for when you are stuck |
+| [Guide](guide.en.md) | **Keep open while coding**: mental model, manifest and composition, config, tools, HTTP routes, UI, state, copy, install and troubleshooting |
 
-Written for people who want to **build plugins on DeepSeek Harness**: from "I have an idea" to "the plugin really runs and ships".
+Chinese originals: [工作流.md](工作流.md) ｜ [指南.md](指南.md). **Chinese is the source**; where the two disagree, Chinese wins.
 
-Baseline runtime: `@deepseek-ai/dsh` **0.2.0-rc.2** (Windows desktop + Web).
+## Two disciplines
 
-**Who this is for**: this guide targets the **official DeepSeek Harness desktop app** (`@deepseek-ai/dsh` `0.2.0-rc.2`) and the **Web client** shipped from the same runtime.
-The two are one runtime — the same `DSH_HOME`, the same plugin loader; the desktop app is only a shell around it — so **plugin code is identical** and this guide never needs to tell them apart.
-⚠️ Community-packaged desktop builds from before that release are **not** this runtime, and their plugin interfaces are not guaranteed to match; where they disagree, this guide's baseline version is the authority.
+1. **Look names up, never guess them**: slot names, prop names, method names, export names — query every one with `cordis_inspect_query` before writing it.
+   A wrong name does not fail loudly: a blank slot, or a silent no-op.
+2. **When you cannot settle something, write a criterion, not a conclusion.** Telling the reader how to measure it themselves beats a sentence that says "it may be like this".
 
-## What to read first
+## What this documentation deliberately omits
 
-| File                                                        | What it is                                                                                                                      | When to read it                                                |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| [DSH Plugin Development Guide](DSH-插件开发指南.en.md)      | **Mechanisms and criteria**: manifest, patch, slots, tools, routes, locale, destructive operations, troubleshooting, acceptance | While writing code                                             |
-| [DSH Plugin Development Workflow](DSH-插件开发工作流.en.md) | **The order of actions**: frame → evidence → copy a reference → write → install → verify → close out                            | Once, **before you start**                                     |
-| [版本快照/](版本快照/README.en.md)                          | **Values queried on one version**: seed table, ownerProps, diagnostic text, and **a minimal plugin verified by a real install** | When you are stuck on "what exactly is this name/field called" |
-
-Both documents ship with an English mirror (`*.en.md`). **Chinese is the source**: where the two disagree, Chinese wins.
-
-**The shortest path**: read the workflow once (~300 lines) → take `版本快照/0.2.0-rc.2/最小实现/demo-plugin/` as your starting point, install it and get it running
-→ then reshape it into your plugin following the guide's sections.
-
-## How these documents are written
-
-- **The body contains only things that do not change with the version** (mechanisms, contracts, criteria, the order of actions, trade-offs with a cost);
-  anything that drifts with the version goes into `版本快照/<version>/` and the body keeps only "where to look it up".
-  The reason is guide §2.2 — hardcoding a table that will expire is worse than omitting it.
-- Every conclusion carries an evidence marker: ✅ measured on this machine ｜ 📖 bundled docs/source ｜ ⚠️ risk note.
-- **No "uncertain" entries are kept**: anything unclear is either deleted or given a criterion that settles it.
-- The methodology (how to tell an "observation" from a "conclusion", and the mistakes documentation most easily makes) is in guide §14 and workflow §8 —
-  those two sections are worth reading even if you never write a DSH plugin.
-
-## In-repository self-checks
-
-```sh
-# 1) Documentation integrity: are all relative links valid, are the Chinese/English mirrors paired
-node 版本快照/0.2.0-rc.2/_tools/docs-integrity.mjs .
-
-# 2) Manifest self-check: point it at your own plugin directory (catches silent path/shape/consistency failures)
-node 版本快照/0.2.0-rc.2/_tools/清单自检.mjs <your plugin directory>
-
-# 3) Extract the bundled docs and frontend artifacts (things inside asar that ordinary commands cannot read)
-node 版本快照/0.2.0-rc.2/_tools/asar-extract.js "<install dir>/resources/app.asar" \
-     "/dsh/node_modules/@deepseek-ai/dsh-client-ui-workspace" "_ref/ui-workspace"
-```
-
-## Maintaining the version snapshots
-
-After upgrading DSH: **copy** the previous version's directory to `<new version>/` (do not edit the old one in place — it is how someone else diagnoses a historical problem),
-re-gather the evidence following each file's "how to look it up again after an upgrade" column, then update the index table and run the documentation self-check.
-Details in [版本快照/README.md](版本快照/README.md).
+- **Version data**: slot lists, theme-token lists, package export lists, one package's field defaults — all of it changes with the version.
+  The body gives the command that queries it; look the value up on the spot.
+- **"This approach is wrong" narratives**: when something really bites, you get **one rule** (for example, `exports` keys must start with `./`),
+  never the history of the mistake — so readers spend their effort on the rule, not on memorising what the trap looked like.
 
 ## License
 
-[MIT](LICENSE)
+MIT
