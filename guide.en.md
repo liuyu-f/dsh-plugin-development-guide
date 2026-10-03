@@ -266,7 +266,3 @@ Editing a file hot-reloads it, and **both halves follow** (the Client swaps its 
 | `link:` does not install the linked package's dependencies | To import a dependency, run `pnpm install` yourself in the plugin directory (or ship it as a tarball and install that) |
 
 **The four troubleshooting entry points**: `application`/`warnings` → `diagnostic` (a stack means the real error; `failed to import` is a fallback string) → `Config.listConfigs`'s `status` → `Slots.listSubTree`'s `occupants`.
-
----
-
-> Companion document: [DSH Plugin Development Workflow](workflow.en.md) ｜ [中文](指南.md)

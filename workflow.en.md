@@ -103,7 +103,3 @@ The riskier the change (endpoints, deleting data, permissions), the further down
 6. **Is it actually running?** → make one live call
 
 **The bar for writing a conclusion**: only evidence that discriminates between causes counts. When you cannot settle it, write it as a **criterion** (tell the reader how to measure it) — or delete it.
-
----
-
-> Companion document: [DSH Plugin Development Guide](guide.en.md) ｜ [中文](工作流.md)
