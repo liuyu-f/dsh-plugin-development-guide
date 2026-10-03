@@ -53,4 +53,4 @@ Details in [版本快照/README.md](版本快照/README.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)

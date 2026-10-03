@@ -51,4 +51,4 @@ node 版本快照/0.2.0-rc.2/_tools/asar-extract.js "<安装目录>/resources/ap
 
 ## 许可
 
-MIT
+[MIT](LICENSE)
