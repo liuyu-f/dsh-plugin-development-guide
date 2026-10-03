@@ -8,6 +8,10 @@ Written for people who want to **build plugins on DeepSeek Harness**: from "I ha
 
 Baseline runtime: `@deepseek-ai/dsh` **0.2.0-rc.2** (Windows desktop + Web).
 
+**Who this is for**: this guide targets the **official DeepSeek Harness desktop app** (`@deepseek-ai/dsh` `0.2.0-rc.2`) and the **Web client** shipped from the same runtime.
+The two are one runtime — the same `DSH_HOME`, the same plugin loader; the desktop app is only a shell around it — so **plugin code is identical** and this guide never needs to tell them apart.
+⚠️ Community-packaged desktop builds from before that release are **not** this runtime, and their plugin interfaces are not guaranteed to match; where they disagree, this guide's baseline version is the authority.
+
 ## What to read first
 
 | File                                                        | What it is                                                                                                                      | When to read it                                                |
