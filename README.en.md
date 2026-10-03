@@ -1,5 +1,7 @@
 # DSH Plugin Development Guide
 
+> [中文](README.md) ｜ English
+
 For writing plugins on the **official DeepSeek Harness desktop app** (`@deepseek-ai/dsh`, Windows desktop + Web — one runtime).
 **Two documents, and you can start.**
 

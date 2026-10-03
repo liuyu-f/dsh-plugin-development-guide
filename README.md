@@ -1,5 +1,7 @@
 # DSH 插件开发指南
 
+> 中文 ｜ [English](README.en.md)
+
 为 **DeepSeek Harness 官方桌面版**（`@deepseek-ai/dsh`，Windows 桌面端 + Web，同一份运行时）写插件用。
 **两份文档，读完就能动手。**
 

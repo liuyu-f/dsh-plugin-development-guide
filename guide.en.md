@@ -1,5 +1,7 @@
 # DSH Plugin Development Guide
 
+> [中文](指南.md) ｜ English ｜ [Workflow](workflow.en.md)
+
 Everything you need to write a plugin that runs in DeepSeek Harness.
 **Read the [Workflow](workflow.en.md) first**; this guide is the reference you keep open while coding.
 

@@ -1,5 +1,7 @@
 # DSH Plugin Development Workflow
 
+> [中文](工作流.md) ｜ English ｜ [Guide](guide.en.md)
+
 From "I want to build something" to "it actually runs". **Read this before you start; keep the [Guide](guide.en.md) open while writing code.**
 
 ## The seven stages
